@@ -1,0 +1,15 @@
+# Python & Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+
+# Docker
+.DS_Store
+
+# Ignore all model formats if user tries to regenerate, keep only the original tracked
+# *.pkl
+# *.h5
+
+# OS generated files
+Thumbs.db

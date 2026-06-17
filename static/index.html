@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Power Demand Forecast</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ Apex Power & Utilities</h1>
+            <h2>Advanced 10-Minute Power Demand Forecasting System</h2>
+        </div>
+
+        <div class="input-group">
+            <label for="date">📅 Select Forecast Date:</label>
+            <input type="date" id="date" value="2026-04-20">
+            <button onclick="getForecast()">🔮 Generate 24-Hour Forecast</button>
+        </div>
+
+        <div id="loading">⏳ Analyzing grid data and generating forecast predictions... Please wait</div>
+        <div id="error"></div>
+
+        <!-- Chart Container -->
+        <div id="chartContainer" style="display: none;">
+            <canvas id="forecastChart" height="100"></canvas>
+        </div>
+
+        <!-- Results Table -->
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>⚙️ Block</th>
+                    <th>🕐 Time</th>
+                    <th>📊 Predicted Load (MW)</th>
+                    <th>🌡️ Temp (°C)</th>
+                    <th>💧 Humidity (%)</th>
+                    <th>💨 Wind (m/s)</th>
+                    <th>☁️ Cloud (%)</th>
+                    <th>🎉 Holiday</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let forecastChart;
+
+        async function getForecast() {
+            const dateInput = document.getElementById('date').value;
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const table = document.getElementById('resultTable');
+            const chartContainer = document.getElementById('chartContainer');
+
+            errorDiv.style.display = 'none';
+            loading.style.display = 'block';
+            table.style.display = 'none';
+            chartContainer.style.display = 'none';
+
+            if (!dateInput) {
+                showError("Please select a date");
+                return;
+            }
+
+            try {
+                const response = await fetch('/forecast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateInput })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Populate Table
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = '';
+
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    const isHoliday = row.IsHoliday === 1;
+                    
+                    tr.innerHTML = `
+                        <td>${row.Block}</td>
+                        <td>${row.Datetime}</td>
+                        <td><strong>${row.Predicted_Total_Load_MW}</strong></td>
+                        <td>${row.Temperature_C}</td>
+                        <td>${row['Humidity_%']}</td>
+                        <td>${row['WindSpeed_m/s']}</td>
+                        <td>${row['CloudCover_%']}</td>
+                        <td>${isHoliday ? '<span class="holiday">🎉 Yes</span>' : 'No'}</td>
+                    `;
+                    if (isHoliday) tr.classList.add('highlight');
+                    tbody.appendChild(tr);
+                });
+
+                // Show Table
+                table.style.display = 'table';
+
+                // Render Chart
+                renderChart(data);
+
+                loading.style.display = 'none';
+
+            } catch (err) {
+                console.error(err);
+                showError("Failed to fetch forecast. Make sure backend is running.");
+            }
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('forecastChart');
+            const chartContainer = document.getElementById('chartContainer');
+            
+            chartContainer.style.display = 'block';
+
+            const labels = data.map(row => row.Datetime.split(' ')[1]); // Show only time
+            const loads = data.map(row => row.Predicted_Total_Load_MW);
+            const temps = data.map(row => row.Temperature_C);
+
+            if (forecastChart) forecastChart.destroy();
+
+            forecastChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Predicted Load (MW)',
+                            data: loads,
+                            borderColor: '#1e40af',
+                            backgroundColor: 'rgba(30, 64, 175, 0.1)',
+                            tension: 0.3,
+                            borderWidth: 3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Temperature (°C)',
+                            data: temps,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.3,
+                            borderWidth: 2,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: {
+                            display: true,
+                            text: '24-Hour Power Demand Forecast with Temperature'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: 'Load (MW)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            title: { display: true, text: 'Temperature (°C)' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showError(msg) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = msg;
+            errorDiv.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Set default date to today
+        window.onload = () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').value = today;
+        };
+    </script>
+</body>
+</html>
